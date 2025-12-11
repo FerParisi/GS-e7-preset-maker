@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GS MUSIC GS-e7 Open Source Preset Maker</title>
+    <style>
+        :root {
+            --bg-dark: #1f1f1f;
+            --panel-bg: #333333;
+            --accent: #4dc2ff;
+            --text: #e0e0e0;
+            --group-border: #4a4a4a;
+            --midi-in: #00ff66;
+            --midi-out: #ff80ff;
+            --init-sys: #ff9900;
+            --info: #999999;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text);
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 20px;
+            font-size: 12px;
+        }
+
+        header {
+            background: var(--panel-bg);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-bottom: 2px solid var(--accent);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        h1 { margin: 0; color: var(--accent); font-size: 1.4rem; }
+        .status-led {
+            width: 10px; height: 10px; border-radius: 50%; background: #444;
+            display: inline-block; margin-left: 5px; box-shadow: 0 0 2px black;
+            border: 1px solid #666;
+        }
+        .status-led.active { background: var(--midi-in); box-shadow: 0 0 8px var(--midi-in); border-color: var(--midi-in); }
+        .status-led.out { background: var(--midi-out); box-shadow: 0 0 8px var(--midi-out); border-color: var(--midi-out); }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        select, input[type="text"] {
+            background: #4a4a4a; border: 1px solid #666; color: var(--text);
+            padding: 5px 10px; border-radius: 4px; font-size: 11px;
+            transition: 0.2s;
+        }
+
+        button {
+            background: #4a4a4a; border: 1px solid #666; color: var(--text);
+            padding: 5px 10px; border-radius: 4px; font-size: 11px;
+            transition: 0.2s;
+            cursor: pointer;
+        }
+        button:hover { background: var(--accent); color: var(--bg-dark); }
+
+        .group-box {
+            border: 1px solid var(--group-border);
+            padding: 5px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #2b2b2b;
+        }
+
+        .init-button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .init-button-group button {
+            background: var(--init-sys);
+            color: var(--bg-dark);
+            font-weight: bold;
+            border: 1px solid var(--init-sys);
+        }
+        .random {
+            background: #2ecc71;
+        }
+        .random:hover {
+            background: #1abc9c;
+        }
+
+        .toggle-button {
+            width: 100%; height: 30px;
+            padding: 2px;
+            font-size: 10px;
+            background: #555;
+            border: 1px solid #777;
+            text-transform: uppercase;
+        }
+        .toggle-button.active {
+            background: var(--midi-in);
+            color: var(--bg-dark);
+            border-color: var(--midi-in);
+            font-weight: bold;
+            box-shadow: 0 0 4px var(--midi-in);
+        }
+
+        #diagnosticLog {
+            width: 100%;
+            height: 100px;
+            background: #111111;
+            color: #ccc;
+            border: 1px solid #555;
+            padding: 5px;
+            overflow-y: scroll;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 10px;
+            white-space: pre-wrap;
+        }
+        .MIDI_OUT { color: var(--midi-out); }
+        .MIDI_IN { color: var(--midi-in); }
+        .SYSEX_OUT { color: #f1c40f; font-weight: bold; }
+        .INFO { color: #fff; }
+        .ERROR { color: #e74c3c; font-weight: bold; }
+
+        .synth-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 10px;
+        }
+
+        .module {
+            background: var(--panel-bg);
+            border: 1px solid var(--group-border);
+            border-radius: 6px;
+            padding: 10px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+        }
+        .module-title {
+            font-size: 10px; font-weight: bold; color: var(--accent);
+            margin-bottom: 10px; border-bottom: 1px solid #ffffff20;
+            text-transform: uppercase;
+        }
+
+        .controls-row {
+            display: flex; flex-wrap: wrap; gap: 4px; justify-content: space-evenly;
+        }
+
+        .param-group {
+            display: flex; flex-direction: column; align-items: center;
+            width: 45px; margin-bottom: 8px;
+        }
+
+        .fader-with-indicators {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .param-label {
+            font-size: 9px; text-align: center; height: 24px;
+            display: flex; align-items: flex-end; justify-content: center;
+            color: var(--info); line-height: 0.9; margin-bottom: 4px;
+        }
+
+        input[type=range][orient=vertical] {
+            -webkit-appearance: none;
+            appearance: none;
+            writing-mode: vertical-lr;
+            direction: rtl;
+            width: 10px;
+            height: 70px; padding: 0; margin: 0;
+            cursor: ns-resize;
+            background: #2b2b2b;
+            border-radius: 4px;
+        }
+
+        input[type=range][orient=vertical]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 2px;
+            cursor: ns-resize;
+            box-shadow: 0 0 4px rgba(0,0,0,0.5);
+        }
+
+        .scale-markers {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 70px;
+            width: 25px;
+            font-size: 7px;
+            color: #7f8c8d;
+            margin-left: 2px;
+            text-align: left;
+            line-height: 1;
+        }
+
+        .param-value {
+            font-size: 9px;
+            color: var(--accent);
+            margin-top: 2px;
+            width: 55px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .cc-prefix { color: #7f8c8d; font-size: 7px; font-weight: normal; }
+        .midi-value { color: #556068; font-size: 7px; font-weight: normal; }
+        select.mini-select { width: 100%; font-size: 9px; padding: 1px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1>GS MUSIC GS-e7 Open Source Preset Maker V1.0</h1>
+            <div style="font-size:0.8rem; color:var(--init-sys); margin-top:4px;">
+                Fernando Gabriel Parisi. © 2025. Licensed under GPLv3.
+            </div>
+            <div style="font-size:0.8rem; color:#aaa; margin-top:4px;">
+                MIDI In: <span id="midiInStatus" class="status-led"></span> &nbsp;
+                MIDI Out: <span id="midiOutStatus" class="status-led"></span>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <div class="group-box">
+                <label>In: <select id="midiInSelect" onchange="connectMidi()"></select></label>
+                <label>Out: <select id="midiOutSelect" onchange="connectMidi()"></select></label>
+                <label>CH: <select id="midiChannel">
+                    <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+                    <option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option>
+                    <option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
+                    <option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option>
+                </select></label>
+            </div>
+
+            <div class="group-box">
+                <label>Preset: <select id="presetPosition"></select></label>
+                <button style="background: #27ae60;" onclick="goToSelectedPreset()">GO</button>
+
+                <div style="display:flex; flex-direction:column; gap:2px; margin-left: 10px;">
+                     <input type="text" id="presetNamePart1" maxlength="10" placeholder="Name 1"
+                            oninput="this.value=this.value.replace(/[^a-zA-Z0-9 _-]/g,''); updateNameData();">
+                     <input type="text" id="presetNamePart2" maxlength="10" placeholder="Name 2"
+                            oninput="this.value=this.value.replace(/[^a-zA-Z0-9 _-]/g,''); updateNameData();">
+                     <input type="text" id="authorName" maxlength="30" placeholder="Author">
+                </div>
+                <button style="background: #27ae60;" onclick="writeNameSysEx()">WRITE NAME</button>
+            </div>
+
+            <div class="init-button-group">
+                <button onclick="initPatchCC()">INIT (Send CCs)</button>
+                <button onclick="initPatchSysEx()">INIT (SysEx Command)</button>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <button class="random" onclick="randomizePatch()">RANDOM</button>
+                <button onclick="sendAllCCs()" style="background: #f39c12; color: #000;">SEND ALL CCs</button>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--group-border); padding: 5px; border-radius: 4px; background: #2b2b2b;">
+                <input type="file" id="importFile" accept=".e7" style="display: none;" onchange="importE7File(event)">
+                <button onclick="document.getElementById('importFile').click()">IMPORT .e7</button>
+                <button onclick="exportE7File()">EXPORT .e7</button>
+            </div>
+        </div>
+
+        <pre id="diagnosticLog">MIDI Diagnostic Log...</pre>
+    </header>
+
+    <div id="synthContainer" class="synth-container"></div>
+
+    <script>
+        const definitions = [
+            { group: "OSC 1", params: [
+                { name: "Shape", cc: 14, def: 32, type: "enum", opts: {0:"Triangle", 16:"Saw-Tri", 32:"Sawtooth", 48:"Off", 64:"Tri + Pulse", 80:"ST + Pulse", 96:"Saw + Pulse", 112:"Pulse"}, id: 22 },
+                { name: "Tune", cc: 9, def: 64, type: "fader", map: "tune", id: 21 },
+                { name: "Transp", cc: 3, def: 64, type: "fader", map: "transpose", id: 20 },
+                { name: "Width", cc: 15, def: 64, type: "fader", id: 23 },
+                { name: "Sync", cc: 51, def: 0, type: "button-toggle", opts: {0:"Off", 127:"On"}, id: 51 }
+            ]},
+            { group: "OSC 1 MODS", params: [
+                { name: "LFO1", cc: 22, def: 0, type: "fader", id: 26 },
+                { name: "LFO2", cc: 23, def: 0, type: "fader", id: 27 },
+                { name: "LFO3", cc: 24, def: 0, type: "fader", id: 28 },
+                { name: "EG1", cc: 25, def: 0, type: "fader", id: 29 },
+                { name: "PWM L1", cc: 26, def: 0, type: "fader", id: 30 },
+                { name: "PWM L2", cc: 27, def: 0, type: "fader", id: 31 },
+                { name: "PWM L3", cc: 28, def: 0, type: "fader", id: 32 },
+                { name: "PWM EG1", cc: 29, def: 0, type: "fader", id: 33 }
+            ]},
+            { group: "OSC 2", params: [
+                { name: "Shape", cc: 34, def: 0, type: "enum", opts: {0:"Triangle", 16:"Saw-Tri", 32:"Sawtooth", 48:"Off", 64:"Tri + Pulse", 80:"ST + Pulse", 96:"Saw + Pulse", 112:"Pulse"}, id: 36 },
+                { name: "Tune", cc: 31, def: 64, type: "fader", map: "tune", id: 35 },
+                { name: "Transp", cc: 30, def: 64, type: "fader", map: "transpose", id: 34 },
+                { name: "Width", cc: 35, def: 64, type: "fader", id: 37 }
+            ]},
+            { group: "OSC 2 MODS", params: [
+                { name: "LFO1", cc: 39, def: 0, type: "fader", id: 40 },
+                { name: "LFO2", cc: 40, def: 0, type: "fader", id: 41 },
+                { name: "LFO3", cc: 41, def: 0, type: "fader", id: 42 },
+                { name: "EG1", cc: 42, def: 0, type: "fader", id: 43 },
+                { name: "PWM L1", cc: 43, def: 0, type: "fader", id: 44 },
+                { name: "PWM L2", cc: 44, def: 0, type: "fader", id: 45 },
+                { name: "PWM L3", cc: 45, def: 0, type: "fader", id: 46 },
+                { name: "PWM EG1", cc: 46, def: 0, type: "fader", id: 47 }
+            ]},
+            { group: "MIXER", params: [
+                { name: "OSC1", cc: 20, def: 100, type: "fader", id: 24 },
+                { name: "Sub1", cc: 21, def: 0, type: "fader", id: 25 },
+                { name: "OSC2", cc: 36, def: 0, type: "fader", id: 38 },
+                { name: "Sub2", cc: 37, def: 0, type: "fader", id: 39 },
+                { name: "Noise", cc: 52, def: 0, type: "fader", id: 52 }
+            ]},
+            { group: "FILTER", params: [
+                { name: "Cutoff", cc: 74, def: 127, type: "fader", id: 70 },
+                { name: "Reso", cc: 71, def: 0, type: "fader", id: 71 }
+            ]},
+            { group: "FILTER MODS", params: [
+                { name: "KeyTrk", cc: 85, def: 0, type: "fader", id: 72 },
+                { name: "EG1", cc: 89, def: 0, type: "fader", id: 76 },
+                { name: "Vel EG1", cc: 86, def: 0, type: "fader", id: 73 },
+                { name: "AfterT", cc: 87, def: 0, type: "fader", id: 74 },
+                { name: "ModWhl", cc: 88, def: 0, type: "fader", id: 75 },
+                { name: "LFO1", cc: 90, def: 0, type: "fader", id: 77 },
+                { name: "LFO2", cc: 91, def: 0, type: "fader", id: 78 },
+                { name: "LFO3", cc: 92, def: 1, type: "fader", id: 79 }
+            ]},
+            { group: "AMPLIFIER", params: [
+                { name: "Level", cc: 11, def: 127, type: "fader", id: 107 },
+                { name: "Pan", cc: 10, def: 64, type: "fader", id: 122 },
+                { name: "Motion", cc: 119, def: 0, type: "fader", id: 123 }
+            ]},
+            { group: "AMP MODS", params: [
+                { name: "KeyTrk", cc: 93, def: 64, type: "fader", id: 79 },
+                { name: "Vel Mod", cc: 94, def: 0, type: "fader", id: 80 },
+                { name: "LFO1", cc: 103, def: 0, type: "fader", id: 81 },
+                { name: "LFO2", cc: 104, def: 0, type: "fader", id: 82 },
+                { name: "LFO3", cc: 105, def: 0, type: "fader", id: 83 }
+            ]},
+            { group: "ENVELOPE 1 (EG1)", params: [
+                { name: "A", cc: 16, def: 127, type: "fader", id: 84 },
+                { name: "D", cc: 17, def: 0, type: "fader", id: 85 },
+                { name: "S", cc: 18, def: 127, type: "fader", id: 86 },
+                { name: "R", cc: 19, def: 0, type: "fader", id: 87 },
+                { name: "VA", cc: 106, def: 0, type: "fader", id: 88 },
+                { name: "VR", cc: 107, def: 0, type: "fader", id: 89 },
+                { name: "KT", cc: 117, def: 0, type: "fader", id: 90 }
+            ]},
+            { group: "ENVELOPE 2 (EG2)", params: [
+                { name: "A", cc: 80, def: 0, type: "fader", id: 91 },
+                { name: "D", cc: 81, def: 0, type: "fader", id: 92 },
+                { name: "S", cc: 82, def: 127, type: "fader", id: 93 },
+                { name: "R", cc: 83, def: 0, type: "fader", id: 94 },
+                { name: "VA", cc: 108, def: 0, type: "fader", id: 95 },
+                { name: "VR", cc: 109, def: 0, type: "fader", id: 96 },
+                { name: "KT", cc: 118, def: 0, type: "fader", id: 97 }
+            ]},
+            { group: "LFO 1", params: [
+                { name: "Shape", cc: 53, def: 0, type: "enum", opts: {0:"Triangle", 16:"Ramp Up", 32:"Ramp Down", 48:"Square", 64:"Noise/S&H"}, id: 53 },
+                { name: "Rate", cc: 76, def: 0, type: "fader", map: "lfoRate", id: 54, modeId: 58 },
+                { name: "Mode", cc: 60, def: 0, type: "enum", opts: {0:"Monophonic", 16:"Polyphonic", 32:"K. Tracking", 48:"K. Sync", 64:"Clock Sync", 80:"K. + Clock Sync"}, id: 58 },
+                { name: "EG1 Mod", cc: 0, def: 0, type: "fader", id: 55 }
+            ]},
+            { group: "LFO 2", params: [
+                { name: "Shape", cc: 61, def: 0, type: "enum", opts: {0:"Triangle", 16:"Ramp Up", 32:"Ramp Down", 48:"Square", 64:"Noise/S&H"}, id: 59 },
+                { name: "Rate", cc: 62, def: 0, type: "fader", map: "lfoRate", id: 60, modeId: 64 },
+                { name: "Mode", cc: 70, def: 0, type: "enum", opts: {0:"Monophonic", 16:"Polyphonic", 32:"K. Tracking", 48:"K. Sync", 64:"Clock Sync", 80:"K. + Clock Sync"}, id: 64 }
+            ]},
+            { group: "LFO 3", params: [
+                { name: "Shape", cc: 72, def: 0, type: "enum", opts: {0:"Triangle", 32:"Ramp Up", 64:"Ramp Down", 96:"Square"}, id: 65 },
+                { name: "Rate", cc: 73, def: 0, type: "fader", id: 66 },
+                { name: "AT", cc: 78, def: 0, type: "fader", id: 67 },
+                { name: "MW", cc: 79, def: 1, type: "fader", id: 68 }
+            ]},
+            { group: "CHORUS/DELAY FX", params: [
+                { name: "Ch Type", cc: 113, def: 0, type: "toggle", map: "chorusType", opts: {0:"Basic", 64:"Ensemble"}, id: 118 },
+                { name: "Ch Rate", cc: 114, def: 0, type: "fader", id: 119 },
+                { name: "Ch Dpth", cc: 115, def: 0, type: "fader", id: 120 },
+                { name: "Ch Mix", cc: 13, def: 0, type: "fader", id: 121 },
+                { name: "Dl Type", cc: 110, def: 0, type: "enum", map: "delayType", opts: {0:"Stereo", 32:"Ping Pong", 64:"Stereo Sync", 96:"Ping Pong Sync"}, id: 114 },
+                { name: "Dl Time", cc: 111, def: 0, type: "fader", id: 115 },
+                { name: "Dl Fdbk", cc: 112, def: 0, type: "fader", id: 116 },
+                { name: "Dl Mix", cc: 12, def: 0, type: "fader", id: 117 }
+            ]},
+            { group: "GENERAL SETTINGS", params: [
+                { name: "Porta", cc: 65, def: 127, type: "button-toggle", opts: {0:"Off", 127:"On"}, id: 48 },
+                { name: "P.Time", cc: 5, def: 0, type: "fader", id: 49 },
+                { name: "Bend", cc: 50, def: 2, type: "fader", max: 12, id: 50 },
+                { name: "Mode", cc: 116, def: 0, type: "enum", opts: {0:"Polyphonic", 16:"Mono, Single Trigger", 32:"Mono, Multi Trigger", 48:"Unison, Single Trigger", 64:"Unison, Multi Trigger"}, id: 98 }
+            ]}
+        ];
+
+        let midiAccess = null, midiOutput = null, midiInput = null;
+        const ccMap = new Map();
+        let nameData = new Uint8Array(20);
+
+        definitions.forEach(sec => sec.params.forEach(p => { if(p.cc > 0) ccMap.set(p.cc, p); }));
+
+        const logEl = document.getElementById('diagnosticLog');
+        function log(msg, type = 'INFO') {
+            const time = new Date().toLocaleTimeString();
+            logEl.innerHTML = `[${time}] [<span class="${type}">${type}</span>] ${msg}\n` + logEl.innerHTML;
+        }
+
+        function blinkLed(id) {
+            const el = document.getElementById(id);
+            el.classList.add(id === 'midiOutStatus' ? 'out' : 'active');
+            setTimeout(() => el.classList.remove('active', 'out'), 100);
+        }
+
+        function getParamById(id) {
+            for (const g of definitions) for (const p of g.params) if (p.id === id) return p;
+            return null;
+        }
+
+        function getCurrentValue(id) {
+            const el = document.getElementById(`ctrl_${id}`);
+            return el ? parseInt(el.value) : 0;
+        }
+
+        function getNoteFraction(v) {
+            if (v<=7) return "1/1"; if (v<=15) return "3/4"; if (v<=23) return "2/3"; if (v<=31) return "1/2";
+            if (v<=39) return "3/8"; if (v<=47) return "1/3"; if (v<=55) return "1/4"; if (v<=63) return "3/16";
+            if (v<=71) return "1/6"; if (v<=79) return "1/8"; if (v<=87) return "3/32"; if (v<=95) return "1/12";
+            if (v<=103) return "1/16"; if (v<=111) return "1/24"; if (v<=127) return "1/32"; return v;
+        }
+        function mapTranspose(v) { return Math.round((v - 64) * 48 / 127); }
+        function mapTune(v) { return Math.round((v - 64) * 100 / 127) + "c"; }
+        function mapDelayType(v) {
+            if (v < 32) return "Stereo"; if (v < 64) return "Ping Pong";
+            if (v < 96) return "Stereo Sync"; return "Ping Pong + Sync";
+        }
+        function mapChorusType(v) { return v < 64 ? "Basic" : "Ensemble"; }
+
+        function updateDisplay(param) {
+            const disp = document.getElementById(`disp_${param.id}`);
+            const ctrlEl = document.getElementById(`ctrl_${param.id}`);
+            const val = ctrlEl ? parseInt(ctrlEl.value) : 0;
+
+            let txt = val;
+            if (param.map === 'transpose') txt = mapTranspose(val);
+            else if (param.map === 'tune') txt = mapTune(val);
+            else if (param.map === 'delayType') txt = mapDelayType(val);
+            else if (param.map === 'chorusType') txt = mapChorusType(val);
+            else if (param.map === 'lfoRate') {
+                const mParam = getParamById(param.modeId);
+                const mVal = mParam ? getCurrentValue(mParam.id) : 0;
+                if (mVal >= 48) txt = getNoteFraction(val);
+            } else if (param.type === 'enum' || param.type === 'toggle' || param.type === 'button-toggle') {
+                const keys = Object.keys(param.opts).map(Number).sort((a,b)=>a-b);
+                let k = keys[0];
+                for(let x of keys) { if(x <= val) k = x; }
+                txt = param.opts[k] || val;
+            }
+
+            if (param.type === 'button-toggle') {
+                if (ctrlEl && ctrlEl.tagName === 'BUTTON') {
+                    ctrlEl.textContent = txt;
+                    const keys = Object.keys(param.opts).map(Number).sort((a,b)=>a-b);
+                    if (val === keys[1]) {
+                        ctrlEl.classList.add('active');
+                    } else {
+                        ctrlEl.classList.remove('active');
+                    }
+                }
+            }
+
+            if (disp) {
+                let html = param.cc > 0 ? `<span class="cc-prefix">[CC${param.cc}]</span><br>` : `<br>`;
+                if (param.type !== 'button-toggle') {
+                    html += (param.type === 'fader' && param.map) ? `${txt}<br><span class="midi-value">(${val})</span>` : `${txt}`;
+                } else {
+                    html = "";
+                }
+                disp.innerHTML = html;
+            }
+        }
+
+        function updateUI(param, val) {
+            const el = document.getElementById(`ctrl_${param.id}`);
+            if (el && el.tagName !== 'BUTTON' && parseInt(el.value) !== val) el.value = val;
+            if (el && el.tagName === 'BUTTON') el.value = val;
+
+            updateDisplay(param);
+            if (param.id === 58) updateDisplay(getParamById(54));
+            if (param.id === 64) updateDisplay(getParamById(60));
+        }
+
+        function handleUIChange(param, val) {
+            val = parseInt(val);
+            updateUI(param, val);
+            if (midiOutput && param.cc > 0) {
+                const ch = parseInt(document.getElementById('midiChannel').value) - 1;
+                midiOutput.send([0xB0 + ch, param.cc, val]);
+                blinkLed('midiOutStatus');
+            }
+        }
+
+        function onControlDblClick(param) { handleUIChange(param, param.def); }
+        function onControlRightClick(e, param) {
+            e.preventDefault();
+            let val = prompt(`Value for ${param.name} (CC${param.cc}):`, getCurrentValue(param.id));
+            if (val !== null) {
+                val = parseInt(val);
+                if (!isNaN(val) && val >= 0 && val <= 127) handleUIChange(param, val);
+            }
+        }
+
+        function validateAuthorInput(event) {
+            const input = event.target;
+            input.value = input.value.replace(/[^a-zA-Z0-9 _-]/g, '');
+        }
+
+        function updateNameData() {
+            const s = (document.getElementById('presetNamePart1').value.padEnd(10,' ').substring(0,10) +
+                       document.getElementById('presetNamePart2').value.padEnd(10,' ').substring(0,10));
+            for(let i=0; i<20; i++) nameData[i] = s.charCodeAt(i);
+        }
+
+        function writeNameSysEx() {
+            if (!midiOutput) { log("Error: MIDI Out not connected", 'ERROR'); return; }
+            updateNameData();
+
+            const presetN = parseInt(document.getElementById('presetPosition').value);
+            const baseAddr = presetN * 128;
+
+            const sendBlock = (addr, dataSlice) => {
+                const addrBytes = [addr & 0x7F, (addr >> 7) & 0x7F, (addr >> 14) & 0x7F];
+                const payload = [];
+                for(let i=0; i<16; i++) {
+                    const b = dataSlice[i] || 0;
+                    payload.push(b & 0x0F);
+                    payload.push((b >> 4) & 0x0F);
+                }
+                const msg = [0xF0, 0x00, 0x21, 0x62, 0x01, 0x10, 0x0F, ...addrBytes, ...payload, 0xF7];
+                midiOutput.send(msg);
+            };
+
+            sendBlock(baseAddr, nameData.slice(0, 16));
+
+            setTimeout(() => {
+                const chunk2 = new Uint8Array(16);
+                for(let i=0; i<4; i++) chunk2[i] = nameData[16+i];
+                sendBlock(baseAddr + 16, chunk2);
+                log(`Name sent to Preset ${presetN}`, 'SYSEX_OUT');
+            }, 50);
+
+            blinkLed('midiOutStatus');
+        }
+
+        function initPatchCC() {
+            if (!midiOutput) log("Warning: MIDI Out not connected", 'ERROR');
+            const ch = parseInt(document.getElementById('midiChannel').value) - 1;
+
+            document.getElementById('presetNamePart1').value = "GS-e7";
+            document.getElementById('presetNamePart2').value = "init";
+            document.getElementById('authorName').value = "";
+            updateNameData();
+
+            definitions.forEach(g => g.params.forEach(p => {
+                if (p.cc > 0) {
+                    const el = document.getElementById(`ctrl_${p.id}`);
+                    if(el) el.value = p.def;
+                    updateUI(p, p.def);
+                    if (midiOutput) midiOutput.send([0xB0 + ch, p.cc, p.def]);
+                }
+            }));
+            log("INIT sent (CCs reset)", 'SYSEX_OUT');
+            blinkLed('midiOutStatus');
+        }
+
+        function initPatchSysEx() {
+            if (!midiOutput) {
+                log("Error: MIDI Out not connected", 'ERROR');
+                return;
+            }
+
+            const sysExInit = [0xF0, 0x00, 0x21, 0x62, 0x01, 0x10, 0x10, 0xF7];
+
+            midiOutput.send(sysExInit);
+            initPatchCC();
+
+            log("INIT sent (SysEx Command 0x10)", 'SYSEX_OUT');
+            blinkLed('midiOutStatus');
+        }
+
+        function sendAllCCs() {
+            if (!midiOutput) { log("Error: MIDI Out not connected", 'ERROR'); return; }
+            const ch = parseInt(document.getElementById('midiChannel').value) - 1;
+            let count = 0;
+            definitions.forEach(g => g.params.forEach(p => {
+                if (p.cc > 0) {
+                    midiOutput.send([0xB0 + ch, p.cc, getCurrentValue(p.id)]);
+                    count++;
+                }
+            }));
+            log(`Sent ${count} CC messages`, 'SYSEX_OUT');
+            blinkLed('midiOutStatus');
+        }
+
+        function randomizePatch() {
+            const ch = parseInt(document.getElementById('midiChannel').value) - 1;
+            definitions.forEach(g => g.params.forEach(p => {
+                if (p.cc === 0) return;
+                let val = 0;
+                if (p.type === 'fader') val = Math.floor(Math.random() * 128);
+                else {
+                    const keys = Object.keys(p.opts);
+                    val = parseInt(keys[Math.floor(Math.random() * keys.length)]);
+                }
+
+                if ((p.id === 53 || p.id === 59) && val >= 80) val = 64;
+
+                const el = document.getElementById(`ctrl_${p.id}`);
+                if(el) el.value = val;
+                updateUI(p, val);
+
+                if (midiOutput) midiOutput.send([0xB0 + ch, p.cc, val]);
+            }));
+            log("Randomization complete", 'INFO');
+        }
+
+        function goToSelectedPreset() {
+            if (!midiOutput) return;
+            const ch = parseInt(document.getElementById('midiChannel').value) - 1;
+            const val = parseInt(document.getElementById('presetPosition').value);
+
+            const bank = Math.floor(val / 64);
+            const prog = val % 64;
+            midiOutput.send([0xB0 + ch, 0x20, bank]);
+            midiOutput.send([0xC0 + ch, prog]);
+            log(`Program Change: Bank ${bank}, Prog ${prog}`, 'SYSEX_OUT');
+            blinkLed('midiOutStatus');
+        }
+
+        function exportE7File() {
+            const n1 = document.getElementById('presetNamePart1').value.trim();
+            const n2 = document.getElementById('presetNamePart2').value.trim();
+            const auth = document.getElementById('authorName').value.trim();
+
+            let txt = `GS Music GS-e7 preset\nName 1: ${n1}\nName 2: ${n2}\nAuthor: ${auth}\nDate: ${new Date().toISOString()}\n`;
+
+            definitions.forEach(g => g.params.forEach(p => {
+                if (p.cc > 0) {
+                    txt += `CC${p.cc},${getCurrentValue(p.id)},${p.name}\n`;
+                }
+            }));
+
+            const blob = new Blob([txt], {type: 'text/plain'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = (n1+n2).replace(/[^a-z0-9]/gi,'_') + ".e7";
+            a.click();
+            log("File exported (.e7)", 'INFO');
+        }
+
+        function importE7File(evt) {
+            const f = evt.target.files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = e => {
+                const lines = e.target.result.split('\n');
+                let count = 0;
+                lines.forEach(l => {
+                    if (l.startsWith("Name 1:")) document.getElementById('presetNamePart1').value = l.split(':')[1].trim();
+                    if (l.startsWith("Name 2:")) document.getElementById('presetNamePart2').value = l.split(':')[1].trim();
+                    if (l.startsWith("Author:")) document.getElementById('authorName').value = l.split(':')[1].trim();
+
+                    if (l.startsWith("CC")) {
+                        const parts = l.split(',');
+                        if (parts.length >= 2) {
+                            const ccStr = parts[0].substring(2);
+                            const cc = parseInt(ccStr);
+                            const val = parseInt(parts[1]);
+
+                            if (!isNaN(cc) && !isNaN(val)) {
+                                const p = ccMap.get(cc);
+                                if (p) {
+                                    updateUI(p, val);
+                                    count++;
+                                }
+                            }
+                        }
+                    }
+                });
+                updateNameData();
+                if (midiOutput) sendAllCCs();
+                log(`Imported .e7: ${count} params loaded & sent.`, 'INFO');
+                evt.target.value = '';
+            };
+            r.readAsText(f);
+        }
+
+        function initMIDI() {
+            const selIn = document.getElementById('midiInSelect');
+            const selOut = document.getElementById('midiOutSelect');
+
+            navigator.requestMIDIAccess({ sysex: true }).then(access => {
+                midiAccess = access;
+                const scan = () => {
+                    const savedIn = selIn.value;
+                    const savedOut = selOut.value;
+                    selIn.innerHTML = '<option value="">-- OFF --</option>';
+                    selOut.innerHTML = '<option value="">-- OFF --</option>';
+
+                    let autoIn = "", autoOut = "";
+
+                    access.inputs.forEach(i => {
+                        selIn.add(new Option(i.name, i.id));
+                        if(i.name.includes("GS-e7")) autoIn = i.id;
+                    });
+                    access.outputs.forEach(o => {
+                        selOut.add(new Option(o.name, o.id));
+                        if(o.name.includes("GS-e7")) autoOut = o.id;
+                    });
+
+                    if(autoIn && !savedIn) selIn.value = autoIn; else selIn.value = savedIn;
+                    if(autoOut && !savedOut) selOut.value = autoOut; else selOut.value = savedOut;
+
+                    connectMidi();
+                };
+
+                access.onstatechange = scan;
+                scan();
+
+                if (access.inputs.size > 0) {
+                     access.inputs.forEach(i => {
+                         i.onmidimessage = (msg) => {
+                             if(msg.data[0] >= 0xF8) return;
+                             if((msg.data[0] & 0xF0) === 0xB0) {
+                                 const cc = msg.data[1];
+                                 const val = msg.data[2];
+                                 const ch = parseInt(document.getElementById('midiChannel').value) - 1;
+
+                                 if((msg.data[0] & 0x0F) === ch && ccMap.has(cc)) {
+                                     const p = ccMap.get(cc);
+                                     if (getCurrentValue(p.id) !== val) {
+                                         const el = document.getElementById(`ctrl_${p.id}`);
+                                         if(el) el.value = val;
+                                         updateUI(p, val);
+                                     }
+                                     log(`IN: CC${cc} ${p.name} = ${val}`, 'MIDI_IN');
+                                     blinkLed('midiInStatus');
+                                 }
+                             }
+                         };
+                     });
+                }
+            });
+        }
+
+        function connectMidi() {
+            const inId = document.getElementById('midiInSelect').value;
+            const outId = document.getElementById('midiOutSelect').value;
+
+            if(midiInput) midiInput = null;
+            if(inId) midiInput = midiAccess.inputs.get(inId);
+            if(outId) midiOutput = midiAccess.outputs.get(outId);
+        }
+
+        window.onload = () => {
+            const cont = document.getElementById('synthContainer');
+            definitions.forEach(g => {
+                let d = document.createElement('div');
+                d.className = 'module';
+                d.innerHTML = `<div class="module-title">${g.group}</div><div class="controls-row"></div>`;
+                const row = d.querySelector('.controls-row');
+
+                g.params.forEach(p => {
+                    let wrap = document.createElement('div');
+                    wrap.className = 'param-group';
+                    wrap.innerHTML = `<div class="param-label">${p.name}</div>`;
+
+                    let ctrl;
+                    if(p.type === 'fader') {
+                        let ind = document.createElement('div');
+                        ind.className = 'fader-with-indicators';
+                        ctrl = document.createElement('input');
+                        ctrl.type = 'range';
+                        ctrl.max = 127;
+                        ctrl.setAttribute('orient', 'vertical');
+
+                        if(p.map === 'tune' || p.map === 'transpose') {
+                            let sc = document.createElement('div');
+                            sc.className = 'scale-markers';
+                            sc.innerHTML = p.map === 'tune' ? `<span>+50c</span><span>0c</span><span>-50c</span>` : `<span>+24</span><span>0</span><span>-24</span>`;
+                            ind.appendChild(ctrl);
+                            ind.appendChild(sc);
+                            wrap.appendChild(ind);
+                        } else {
+                            ind.appendChild(ctrl);
+                            wrap.appendChild(ind);
+                        }
+
+                        ctrl.ondblclick = () => onControlDblClick(p);
+                        ctrl.oncontextmenu = (e) => onControlRightClick(e, p);
+
+                    } else if (p.type === 'enum' || p.type === 'toggle') {
+                        ctrl = document.createElement('select');
+                        ctrl.className = 'mini-select';
+                        for(let k in p.opts) ctrl.add(new Option(p.opts[k], k));
+                        wrap.appendChild(ctrl);
+
+                        ctrl.ondblclick = () => onControlDblClick(p);
+                        ctrl.oncontextmenu = (e) => onControlRightClick(e, p);
+
+                    } else if (p.type === 'button-toggle') {
+                        ctrl = document.createElement('button');
+                        ctrl.type = 'button';
+                        ctrl.classList.add('toggle-button');
+                        ctrl.value = p.def;
+
+                        ctrl.onclick = (e) => {
+                            const currentVal = parseInt(e.target.value);
+                            const keys = Object.keys(p.opts).map(Number);
+                            const newVal = currentVal === keys[0] ? keys[1] : keys[0];
+                            handleUIChange(p, newVal);
+                        };
+
+                        wrap.appendChild(ctrl);
+                    }
+
+                    ctrl.id = `ctrl_${p.id}`;
+                    ctrl.value = p.def;
+                    if (p.type !== 'button-toggle') {
+                        ctrl.oninput = (e) => handleUIChange(p, e.target.value);
+                        ctrl.onchange = (e) => handleUIChange(p, e.target.value);
+                    }
+
+                    let disp = document.createElement('div');
+                    disp.className = 'param-value';
+                    disp.id = `disp_${p.id}`;
+                    wrap.appendChild(disp);
+                    row.appendChild(wrap);
+
+                    updateDisplay(p);
+                });
+                cont.appendChild(d);
+            });
+
+            const ps = document.getElementById('presetPosition');
+            for(let i=0; i<512; i++) {
+                const bank = Math.floor(i / 64) + 1;
+                const rem = i % 64;
+                const grp = Math.floor(rem / 8) + 1;
+                const prg = (rem % 8) + 1;
+                ps.add(new Option(`${bank}.${grp}.${prg}`, i));
+            }
+
+            const inputAuthor = document.getElementById('authorName');
+            inputAuthor.addEventListener('input', validateAuthorInput);
+
+            initMIDI();
+            log("Ready.", 'INFO');
+        };
+    </script>
+</body>
+</html>
