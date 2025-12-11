@@ -347,7 +347,7 @@
                 { name: "Noise", cc: 52, def: 0, type: "fader", id: 52 }
             ]},
             { group: "FILTER", params: [
-                { name: "Cutoff", cc: 74, def: 127, type: "fader", id: 70 },
+                { name: "Cutoff", cc: 74, def: 127, type: "fader", map: "cutoffHz", id: 70 },
                 { name: "Reso", cc: 71, def: 0, type: "fader", id: 71 }
             ]},
             { group: "FILTER MODS", params: [
@@ -392,28 +392,30 @@
             ]},
             { group: "LFO 1", params: [
                 { name: "Shape", cc: 53, def: 0, type: "enum", opts: {0:"Triangle", 16:"Ramp Up", 32:"Ramp Down", 48:"Square", 64:"Noise/S&H"}, id: 53 },
-                { name: "Rate", cc: 76, def: 0, type: "fader", map: "lfoRate", id: 54, modeId: 58 },
+                { name: "Rate", cc: 76, def: 0, type: "fader", map: "lfoRateHz", id: 54, modeId: 58 },
                 { name: "Mode", cc: 60, def: 0, type: "enum", opts: {0:"Monophonic", 16:"Polyphonic", 32:"K. Tracking", 48:"K. Sync", 64:"Clock Sync", 80:"K. + Clock Sync"}, id: 58 },
                 { name: "EG1 Mod", cc: 0, def: 0, type: "fader", id: 55 }
             ]},
             { group: "LFO 2", params: [
                 { name: "Shape", cc: 61, def: 0, type: "enum", opts: {0:"Triangle", 16:"Ramp Up", 32:"Ramp Down", 48:"Square", 64:"Noise/S&H"}, id: 59 },
-                { name: "Rate", cc: 62, def: 0, type: "fader", map: "lfoRate", id: 60, modeId: 64 },
+                { name: "Rate", cc: 62, def: 0, type: "fader", map: "lfoRateHz", id: 60, modeId: 64 },
                 { name: "Mode", cc: 70, def: 0, type: "enum", opts: {0:"Monophonic", 16:"Polyphonic", 32:"K. Tracking", 48:"K. Sync", 64:"Clock Sync", 80:"K. + Clock Sync"}, id: 64 }
             ]},
             { group: "LFO 3", params: [
                 { name: "Shape", cc: 72, def: 0, type: "enum", opts: {0:"Triangle", 32:"Ramp Up", 64:"Ramp Down", 96:"Square"}, id: 65 },
-                { name: "Rate", cc: 73, def: 0, type: "fader", id: 66 },
+                { name: "Rate", cc: 73, def: 0, type: "fader", map: "lfoRateHz", id: 66 },
                 { name: "AT", cc: 78, def: 0, type: "fader", id: 67 },
                 { name: "MW", cc: 79, def: 1, type: "fader", id: 68 }
             ]},
-            { group: "CHORUS/DELAY FX", params: [
+            { group: "CHORUS FX", params: [
                 { name: "Ch Type", cc: 113, def: 0, type: "toggle", map: "chorusType", opts: {0:"Basic", 64:"Ensemble"}, id: 118 },
                 { name: "Ch Rate", cc: 114, def: 0, type: "fader", id: 119 },
                 { name: "Ch Dpth", cc: 115, def: 0, type: "fader", id: 120 },
-                { name: "Ch Mix", cc: 13, def: 0, type: "fader", id: 121 },
-                { name: "Dl Type", cc: 110, def: 0, type: "enum", map: "delayType", opts: {0:"Stereo", 32:"Ping Pong", 64:"Stereo Sync", 96:"Ping Pong Sync"}, id: 114 },
-                { name: "Dl Time", cc: 111, def: 0, type: "fader", id: 115 },
+                { name: "Ch Mix", cc: 13, def: 0, type: "fader", id: 121 }
+            ]},
+            { group: "DELAY FX", params: [
+                { name: "Dl Type", cc: 110, def: 0, type: "enum", map: "delayType", opts: {0:"Stereo", 32:"Ping Pong", 64:"Stereo Sync", 96:"Ping Pong + Sync"}, id: 114 },
+                { name: "Dl Time", cc: 111, def: 0, type: "fader", map: "delayTimeMs", id: 115 },
                 { name: "Dl Fdbk", cc: 112, def: 0, type: "fader", id: 116 },
                 { name: "Dl Mix", cc: 12, def: 0, type: "fader", id: 117 }
             ]},
@@ -463,6 +465,30 @@
         }
         function mapTranspose(v) { return Math.round((v - 64) * 48 / 127) + "s"; }
         function mapTune(v) { return Math.round((v - 64) * 100 / 127) + "c"; }
+        
+        function mapLfoRateToHz(v) {
+            const minHz = 0.10;
+            const maxHz = 100.0;
+            const hz = minHz * Math.pow(maxHz / minHz, v / 127);
+            return hz.toFixed(2) + "Hz";
+        }
+
+        function mapCutoffToHz(v) {
+            const minHz = 10.0;
+            const maxHz = 25000.0;
+            const hz = minHz * Math.pow(maxHz / minHz, v / 127);
+            if (hz >= 1000) return (hz / 1000).toFixed(2) + "kHz";
+            return hz.toFixed(1) + "Hz";
+        }
+
+        function mapDelayTimeToMs(v) {
+            const minMs = 50;
+            const maxMs = 1350;
+            const ms = minMs + (v / 127) * (maxMs - minMs);
+            if (ms >= 1000) return (ms / 1000).toFixed(2) + "s";
+            return ms.toFixed(0) + "ms";
+        }
+
         function mapDelayType(v) {
             if (v < 32) return "Stereo"; if (v < 64) return "Ping Pong";
             if (v < 96) return "Stereo Sync"; return "Ping Pong + Sync";
@@ -488,13 +514,30 @@
             let txt = val;
             if (param.map === 'transpose') txt = mapTranspose(val);
             else if (param.map === 'tune') txt = mapTune(val);
+            else if (param.map === 'cutoffHz') txt = mapCutoffToHz(val);
+            else if (param.map === 'delayTimeMs') {
+                const typeParam = getParamById(114);
+                const typeVal = typeParam ? getCurrentValue(typeParam.id) : 0;
+                if (typeVal < 64) {
+                    txt = mapDelayTimeToMs(val);
+                }
+            }
+            else if (param.map === 'lfoRateHz') {
+                if (param.id === 66) {
+                    txt = mapLfoRateToHz(val);
+                } else {
+                    const modeParam = getParamById(param.modeId);
+                    const modeVal = modeParam ? getCurrentValue(modeParam.id) : 0;
+                    if (modeVal < 64) {
+                        txt = mapLfoRateToHz(val);
+                    } else {
+                        txt = getNoteFraction(val);
+                    }
+                }
+            }
             else if (param.map === 'delayType') txt = mapDelayType(val);
             else if (param.map === 'chorusType') txt = mapChorusType(val);
-            else if (param.map === 'lfoRate') {
-                const mParam = getParamById(param.modeId);
-                const mVal = mParam ? getCurrentValue(mParam.id) : 0;
-                if (mVal >= 48) txt = getNoteFraction(val);
-            } else if (param.map === 'v1poly') {
+            else if (param.map === 'v1poly') {
                 txt = mapV1Poly(val);
             } else if (param.map === 'v2mono') {
                 txt = mapV2Mono(val);
@@ -796,7 +839,7 @@
             const blob = new Blob([txt], {type: 'text/plain'});
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            
+
             let fileName = n1;
             if (n1 && n2) {
                 fileName += "_" + n2;
@@ -939,12 +982,22 @@
                                          log(`IN: CC116 V1=${v1Val} V2=${v2Val} = ${val}`, 'MIDI_IN');
                                          blinkLed('midiInStatus');
                                      } else {
-                                        if (getCurrentValue(p.id) !== val) {
-                                            const el = document.getElementById(`ctrl_${p.id}`);
-                                            if(el) el.value = val;
-                                            updateUI(p, val);
+                                        let uiVal = val;
+                                        if (p.type === 'enum' || p.type === 'toggle') {
+                                            const keys = Object.keys(p.opts).map(Number).sort((a,b)=>a-b);
+                                            let k = keys[0];
+                                            for(let x of keys) { if(x <= val) k = x; }
+                                            uiVal = k; 
                                         }
-                                        log(`IN: CC${cc} ${p.name} = ${val}`, 'MIDI_IN');
+
+                                        if (getCurrentValue(p.id) !== uiVal) {
+                                            const el = document.getElementById(`ctrl_${p.id}`);
+                                            if(el) el.value = uiVal;
+                                            updateUI(p, uiVal);
+                                        }
+                                        
+                                        const logVal = (uiVal !== val) ? `${val} (Mapped to: ${uiVal})` : `${val}`;
+                                        log(`IN: CC${cc} ${p.name} = ${logVal}`, 'MIDI_IN');
                                         blinkLed('midiInStatus');
                                      }
                                  }
@@ -983,7 +1036,7 @@
                         ind.className = 'fader-with-indicators';
                         ctrl = document.createElement('input');
                         ctrl.type = 'range';
-                        ctrl.max = 127;
+                        ctrl.max = p.max || 127;
                         ctrl.setAttribute('orient', 'vertical');
 
                         if(p.map === 'tune' || p.map === 'transpose') {
