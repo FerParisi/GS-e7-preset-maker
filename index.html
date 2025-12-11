@@ -56,7 +56,7 @@
             background: #4a4a4a; border: 1px solid #666; color: var(--text);
             padding: 5px 10px; border-radius: 4px; font-size: 11px;
             transition: 0.2s;
-            box-sizing: border-box; 
+            box-sizing: border-box;
         }
 
         button {
@@ -76,12 +76,12 @@
             gap: 8px;
             background: #2b2b2b;
         }
-        
+
         .name-author-group {
             display: flex;
             flex-direction: column;
             gap: 4px;
-            align-items: stretch; 
+            align-items: stretch;
         }
         .name-row {
             display: flex;
@@ -97,7 +97,7 @@
         }
         .name-row input[type="text"] {
             flex-grow: 1;
-            width: calc(50% - 2px); 
+            width: calc(50% - 2px);
         }
 
         .init-button-group {
@@ -271,7 +271,7 @@
                 <label>Preset: <select id="presetPosition"></select></label>
                 <button style="background: #27ae60;" onclick="goToSelectedPreset()">GO</button>
             </div>
-            
+
             <div class="group-box name-author-group">
                 <div class="name-row">
                      <input type="text" id="presetNamePart1" maxlength="10" placeholder="Name 1"
@@ -424,6 +424,8 @@
                 { name: "Porta", cc: 65, def: 127, type: "button-toggle", opts: {0:"Off", 127:"On"}, id: 48 },
                 { name: "P.Time", cc: 5, def: 0, type: "fader", id: 49 },
                 { name: "Bend", cc: 50, def: 2, type: "fader", max: 12, id: 50 },
+                { name: "V1 (Poly)", cc: 116, def: 0, type: "enum-v1", opts: {0:"All", 1:"Even", 2:"Odd", 3:"1->7", 4:"7->1"}, id: 99 },
+                { name: "V2 (Mono)", cc: 116, def: 0, type: "enum-v2", opts: {0:"Free", 1:"1", 2:"2", 3:"3", 4:"4", 5:"5", 6:"6", 7:"7"}, id: 100 },
                 { name: "Mode", cc: 116, def: 0, type: "enum", opts: {0:"Polyphonic", 16:"Mono, Single Trigger", 32:"Mono, Multi Trigger", 48:"Unison, Single Trigger", 64:"Unison, Multi Trigger"}, id: 98 }
             ]}
         ];
@@ -469,6 +471,17 @@
             if (v < 96) return "Stereo Sync"; return "Ping Pong + Sync";
         }
         function mapChorusType(v) { return v < 64 ? "Basic" : "Ensemble"; }
+        function mapV1Poly(v) {
+            const table = {0:"All", 1:"Even", 2:"Odd", 3:"1->7", 4:"7->1"};
+            return table[v] || v;
+        }
+        function mapV2Mono(v) {
+            const table = {0:"Free", 1:"1", 2:"2", 3:"3", 4:"4", 5:"5", 6:"6", 7:"7"};
+            return table[v] || v;
+        }
+        function calculateCC116Value(v1Value, v2Value) { return 16 * v1Value + v2Value; }
+        function getV1Value(cc116Value) { return Math.floor(cc116Value / 16); }
+        function getV2Value(cc116Value) { return cc116Value % 16; }
 
         function updateDisplay(param) {
             const disp = document.getElementById(`disp_${param.id}`);
@@ -484,6 +497,10 @@
                 const mParam = getParamById(param.modeId);
                 const mVal = mParam ? getCurrentValue(mParam.id) : 0;
                 if (mVal >= 48) txt = getNoteFraction(val);
+            } else if (param.map === 'v1poly') {
+                txt = mapV1Poly(val);
+            } else if (param.map === 'v2mono') {
+                txt = mapV2Mono(val);
             } else if (param.type === 'enum' || param.type === 'toggle' || param.type === 'button-toggle') {
                 const keys = Object.keys(param.opts).map(Number).sort((a,b)=>a-b);
                 let k = keys[0];
@@ -505,13 +522,36 @@
 
             if (disp) {
                 let html = param.cc > 0 ? `<span class="cc-prefix">[CC${param.cc}]</span><br>` : `<br>`;
-                if (param.type !== 'button-toggle') {
+                
+                if (param.cc === 116) {
+                    const v1Val = getCurrentValue(99);
+                    const v2Val = getCurrentValue(100);
+                    const combinedCC116Value = calculateCC116Value(v1Val, v2Val);
+                    
+                    let valToShow = (param.id === 98) ? val : combinedCC116Value;
+                    
+                    if (combinedCC116Value > 71) {
+                         disp.style.color = '#e74c3c';
+                         html += `${txt}<br><span class="midi-value">CC116=${valToShow} (ERR > 71)</span>`;
+                    } else {
+                         disp.style.color = 'var(--accent)';
+                         html += `${txt}<br><span class="midi-value">CC116=${valToShow}</span>`;
+                    }
+                } else if (param.type !== 'button-toggle') {
                     html += (param.type === 'fader' && param.map) ? `${txt}<br><span class="midi-value">(${val})</span>` : `${txt}`;
+                    disp.style.color = 'var(--accent)';
                 } else {
                     html = "";
                 }
                 disp.innerHTML = html;
             }
+        }
+
+        function updateUIValueOnly(param, val) {
+            const el = document.getElementById(`ctrl_${param.id}`);
+            if (el && el.tagName !== 'BUTTON' && parseInt(el.value) !== val) el.value = val;
+            if (el && el.tagName === 'BUTTON') el.value = val;
+            updateDisplay(param);
         }
 
         function updateUI(param, val) {
@@ -526,10 +566,57 @@
 
         function handleUIChange(param, val) {
             val = parseInt(val);
-            updateUI(param, val);
+            
+            let ccValueToSend = val;
+            let syncValue = val;
+
+            if (param.cc === 116) {
+                if (param.id === 99 || param.id === 100) {
+                    const v1Val = (param.id === 99) ? val : getCurrentValue(99);
+                    const v2Val = (param.id === 100) ? val : getCurrentValue(100);
+                    ccValueToSend = calculateCC116Value(v1Val, v2Val);
+                    syncValue = ccValueToSend;
+                } else if (param.id === 98) {
+                    ccValueToSend = val;
+                    syncValue = val;
+                }
+
+                const v1Val = getV1Value(syncValue);
+                const v2Val = getV2Value(syncValue);
+
+                const p1 = getParamById(99);
+                const p2 = getParamById(100);
+                const pMode = getParamById(98);
+
+                if (p1) updateUIValueOnly(p1, v1Val);
+                if (p2) updateUIValueOnly(p2, v2Val);
+
+                if (pMode) {
+                    const keys = Object.keys(pMode.opts).map(Number).sort((a,b)=>a-b);
+                    let closestVal = keys[0];
+                    let minDiff = 127;
+                    for(let k of keys) {
+                        const diff = Math.abs(k - syncValue);
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            closestVal = k;
+                        }
+                    }
+                    updateUIValueOnly(pMode, closestVal);
+                }
+            } else {
+                updateUI(param, val);
+            }
+
             if (midiOutput && param.cc > 0) {
                 const ch = parseInt(document.getElementById('midiChannel').value) - 1;
-                midiOutput.send([0xB0 + ch, param.cc, val]);
+
+                if (ccValueToSend > 71 && param.cc === 116) {
+                    log(`Warning: CC116 value ${ccValueToSend} exceeds 71 (reserved). Not sent.`, 'ERROR');
+                    return;
+                }
+
+                midiOutput.send([0xB0 + ch, param.cc, ccValueToSend]);
                 blinkLed('midiOutStatus');
             }
         }
@@ -599,8 +686,7 @@
                 if (p.cc > 0) {
                     const el = document.getElementById(`ctrl_${p.id}`);
                     if(el) el.value = p.def;
-                    updateUI(p, p.def);
-                    if (midiOutput) midiOutput.send([0xB0 + ch, p.cc, p.def]);
+                    handleUIChange(p, p.def);
                 }
             }));
             log("INIT sent (CCs reset)", 'SYSEX_OUT');
@@ -628,7 +714,23 @@
             let count = 0;
             definitions.forEach(g => g.params.forEach(p => {
                 if (p.cc > 0) {
-                    midiOutput.send([0xB0 + ch, p.cc, getCurrentValue(p.id)]);
+                    let ccValueToSend = getCurrentValue(p.id);
+                    if (p.cc === 116) {
+                        if (p.id === 99 || p.id === 100) {
+                            const v1Val = getCurrentValue(99);
+                            const v2Val = getCurrentValue(100);
+                            ccValueToSend = calculateCC116Value(v1Val, v2Val);
+                        } else if (p.id === 98) {
+                            ccValueToSend = getCurrentValue(98);
+                        }
+                    }
+
+                    if (ccValueToSend > 71 && p.cc === 116) {
+                        log(`Warning: CC116 value ${ccValueToSend} exceeds 71 (reserved). Not sent.`, 'ERROR');
+                        return;
+                    }
+
+                    midiOutput.send([0xB0 + ch, p.cc, ccValueToSend]);
                     count++;
                 }
             }));
@@ -651,9 +753,8 @@
 
                 const el = document.getElementById(`ctrl_${p.id}`);
                 if(el) el.value = val;
-                updateUI(p, val);
-
-                if (midiOutput) midiOutput.send([0xB0 + ch, p.cc, val]);
+                
+                handleUIChange(p, val);
             }));
             log("Randomization complete", 'INFO');
         }
@@ -664,9 +765,9 @@
             const val = parseInt(document.getElementById('presetPosition').value);
 
             const bankLSBValue = Math.floor(val / 128);
-            const prog = val % 128; 
+            const prog = val % 128;
 
-            midiOutput.send([0xB0 + ch, 0x00, 0x00]); 
+            midiOutput.send([0xB0 + ch, 0x00, 0x00]);
             midiOutput.send([0xB0 + ch, 0x20, bankLSBValue]);
             midiOutput.send([0xC0 + ch, prog]);
 
@@ -683,7 +784,15 @@
 
             definitions.forEach(g => g.params.forEach(p => {
                 if (p.cc > 0) {
-                    txt += `CC${p.cc},${getCurrentValue(p.id)},${p.name}\n`;
+                    let ccValue;
+                    if (p.cc === 116) {
+                        if (p.id === 99) ccValue = calculateCC116Value(getCurrentValue(99), getCurrentValue(100));
+                        else if (p.id === 100) return;
+                        else ccValue = getCurrentValue(p.id);
+                    } else {
+                        ccValue = getCurrentValue(p.id);
+                    }
+                    txt += `CC${p.cc},${ccValue},${p.name}\n`;
                 }
             }));
 
@@ -717,7 +826,28 @@
                             if (!isNaN(cc) && !isNaN(val)) {
                                 const p = ccMap.get(cc);
                                 if (p) {
-                                    updateUI(p, val);
+                                    if (cc === 116) {
+                                        const v1Val = getV1Value(val);
+                                        const v2Val = getV2Value(val);
+                                        updateUIValueOnly(getParamById(99), v1Val);
+                                        updateUIValueOnly(getParamById(100), v2Val);
+                                        
+                                        const pMode = getParamById(98);
+                                        const keys = Object.keys(pMode.opts).map(Number).sort((a,b)=>a-b);
+                                        let closestVal = keys[0];
+                                        let minDiff = 127;
+                                        for(let k of keys) {
+                                            const diff = Math.abs(k - val);
+                                            if (diff < minDiff) {
+                                                minDiff = diff;
+                                                closestVal = k;
+                                            }
+                                        }
+                                        updateUIValueOnly(pMode, closestVal);
+
+                                    } else {
+                                        updateUIValueOnly(p, val);
+                                    }
                                     count++;
                                 }
                             }
@@ -775,13 +905,43 @@
 
                                  if((msg.data[0] & 0x0F) === ch && ccMap.has(cc)) {
                                      const p = ccMap.get(cc);
-                                     if (getCurrentValue(p.id) !== val) {
-                                         const el = document.getElementById(`ctrl_${p.id}`);
-                                         if(el) el.value = val;
-                                         updateUI(p, val);
+                                     
+                                     if (cc === 116) {
+                                         const syncValue = val;
+                                         const v1Val = getV1Value(syncValue);
+                                         const v2Val = getV2Value(syncValue);
+
+                                         const p1 = getParamById(99);
+                                         const p2 = getParamById(100);
+                                         const pMode = getParamById(98);
+
+                                         if (p1 && getCurrentValue(p1.id) !== v1Val) updateUIValueOnly(p1, v1Val);
+                                         if (p2 && getCurrentValue(p2.id) !== v2Val) updateUIValueOnly(p2, v2Val);
+
+                                         if (pMode) {
+                                             const keys = Object.keys(pMode.opts).map(Number).sort((a,b)=>a-b);
+                                             let closestVal = keys[0];
+                                             let minDiff = 127;
+                                             for(let k of keys) {
+                                                 const diff = Math.abs(k - syncValue);
+                                                 if (diff < minDiff) {
+                                                     minDiff = diff;
+                                                     closestVal = k;
+                                                 }
+                                             }
+                                             if (getCurrentValue(pMode.id) !== closestVal) updateUIValueOnly(pMode, closestVal);
+                                         }
+                                         log(`IN: CC116 V1=${v1Val} V2=${v2Val} = ${val}`, 'MIDI_IN');
+                                         blinkLed('midiInStatus');
+                                     } else {
+                                        if (getCurrentValue(p.id) !== val) {
+                                            const el = document.getElementById(`ctrl_${p.id}`);
+                                            if(el) el.value = val;
+                                            updateUI(p, val);
+                                        }
+                                        log(`IN: CC${cc} ${p.name} = ${val}`, 'MIDI_IN');
+                                        blinkLed('midiInStatus');
                                      }
-                                     log(`IN: CC${cc} ${p.name} = ${val}`, 'MIDI_IN');
-                                     blinkLed('midiInStatus');
                                  }
                              }
                          };
@@ -836,7 +996,7 @@
                         ctrl.ondblclick = () => onControlDblClick(p);
                         ctrl.oncontextmenu = (e) => onControlRightClick(e, p);
 
-                    } else if (p.type === 'enum' || p.type === 'toggle') {
+                    } else if (p.type === 'enum' || p.type === 'toggle' || p.type === 'enum-v1' || p.type === 'enum-v2') {
                         ctrl = document.createElement('select');
                         ctrl.className = 'mini-select';
                         for(let k in p.opts) ctrl.add(new Option(p.opts[k], k));
