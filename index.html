@@ -246,9 +246,6 @@
     <header>
         <div>
             <h1>GS MUSIC GS-e7 Open Source Preset Maker V1.0</h1>
-            <div style="font-size:0.8rem; color:var(--init-sys); margin-top:4px;">
-                Fernando Gabriel Parisi. © 2025. Licensed under GPLv3.
-            </div>
             <div style="font-size:0.8rem; color:#aaa; margin-top:4px;">
                 MIDI In: <span id="midiInStatus" class="status-led"></span> &nbsp;
                 MIDI Out: <span id="midiOutStatus" class="status-led"></span>
@@ -522,14 +519,14 @@
 
             if (disp) {
                 let html = param.cc > 0 ? `<span class="cc-prefix">[CC${param.cc}]</span><br>` : `<br>`;
-                
+
                 if (param.cc === 116) {
                     const v1Val = getCurrentValue(99);
                     const v2Val = getCurrentValue(100);
                     const combinedCC116Value = calculateCC116Value(v1Val, v2Val);
-                    
+
                     let valToShow = (param.id === 98) ? val : combinedCC116Value;
-                    
+
                     if (combinedCC116Value > 71) {
                          disp.style.color = '#e74c3c';
                          html += `${txt}<br><span class="midi-value">CC116=${valToShow} (ERR > 71)</span>`;
@@ -566,7 +563,7 @@
 
         function handleUIChange(param, val) {
             val = parseInt(val);
-            
+
             let ccValueToSend = val;
             let syncValue = val;
 
@@ -753,7 +750,7 @@
 
                 const el = document.getElementById(`ctrl_${p.id}`);
                 if(el) el.value = val;
-                
+
                 handleUIChange(p, val);
             }));
             log("Randomization complete", 'INFO');
@@ -799,7 +796,15 @@
             const blob = new Blob([txt], {type: 'text/plain'});
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = (n1+n2).replace(/[^a-z0-9]/gi,'_') + ".e7";
+            
+            let fileName = n1;
+            if (n1 && n2) {
+                fileName += "_" + n2;
+            } else if (n2) {
+                fileName = n2;
+            }
+            a.download = fileName.replace(/[^a-z0-9_]/gi,'_') + ".e7";
+
             a.click();
             log("File exported (.e7)", 'INFO');
         }
@@ -831,7 +836,7 @@
                                         const v2Val = getV2Value(val);
                                         updateUIValueOnly(getParamById(99), v1Val);
                                         updateUIValueOnly(getParamById(100), v2Val);
-                                        
+
                                         const pMode = getParamById(98);
                                         const keys = Object.keys(pMode.opts).map(Number).sort((a,b)=>a-b);
                                         let closestVal = keys[0];
@@ -905,7 +910,7 @@
 
                                  if((msg.data[0] & 0x0F) === ch && ccMap.has(cc)) {
                                      const p = ccMap.get(cc);
-                                     
+
                                      if (cc === 116) {
                                          const syncValue = val;
                                          const v1Val = getV1Value(syncValue);
