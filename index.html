@@ -56,6 +56,7 @@
             background: #4a4a4a; border: 1px solid #666; color: var(--text);
             padding: 5px 10px; border-radius: 4px; font-size: 11px;
             transition: 0.2s;
+            box-sizing: border-box; 
         }
 
         button {
@@ -74,6 +75,29 @@
             align-items: center;
             gap: 8px;
             background: #2b2b2b;
+        }
+        
+        .name-author-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-items: stretch; 
+        }
+        .name-row {
+            display: flex;
+            gap: 4px;
+        }
+        .author-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .author-row input[type="text"] {
+            flex-grow: 1;
+        }
+        .name-row input[type="text"] {
+            flex-grow: 1;
+            width: calc(50% - 2px); 
         }
 
         .init-button-group {
@@ -246,15 +270,19 @@
             <div class="group-box">
                 <label>Preset: <select id="presetPosition"></select></label>
                 <button style="background: #27ae60;" onclick="goToSelectedPreset()">GO</button>
-
-                <div style="display:flex; flex-direction:column; gap:2px; margin-left: 10px;">
+            </div>
+            
+            <div class="group-box name-author-group">
+                <div class="name-row">
                      <input type="text" id="presetNamePart1" maxlength="10" placeholder="Name 1"
                             oninput="this.value=this.value.replace(/[^a-zA-Z0-9 _-]/g,''); updateNameData();">
                      <input type="text" id="presetNamePart2" maxlength="10" placeholder="Name 2"
                             oninput="this.value=this.value.replace(/[^a-zA-Z0-9 _-]/g,''); updateNameData();">
-                     <input type="text" id="authorName" maxlength="30" placeholder="Author">
                 </div>
-                <button style="background: #27ae60;" onclick="writeNameSysEx()">WRITE NAME</button>
+                <div class="author-row">
+                    <input type="text" id="authorName" maxlength="30" placeholder="Author">
+                    <button style="background: #27ae60;" onclick="writeNameSysEx()">WRITE NAME</button>
+                </div>
             </div>
 
             <div class="init-button-group">
@@ -434,7 +462,7 @@
             if (v<=71) return "1/6"; if (v<=79) return "1/8"; if (v<=87) return "3/32"; if (v<=95) return "1/12";
             if (v<=103) return "1/16"; if (v<=111) return "1/24"; if (v<=127) return "1/32"; return v;
         }
-        function mapTranspose(v) { return Math.round((v - 64) * 48 / 127); }
+        function mapTranspose(v) { return Math.round((v - 64) * 48 / 127) + "s"; }
         function mapTune(v) { return Math.round((v - 64) * 100 / 127) + "c"; }
         function mapDelayType(v) {
             if (v < 32) return "Stereo"; if (v < 64) return "Ping Pong";
@@ -635,11 +663,14 @@
             const ch = parseInt(document.getElementById('midiChannel').value) - 1;
             const val = parseInt(document.getElementById('presetPosition').value);
 
-            const bank = Math.floor(val / 64);
-            const prog = val % 64;
-            midiOutput.send([0xB0 + ch, 0x20, bank]);
+            const bankLSBValue = Math.floor(val / 128);
+            const prog = val % 128; 
+
+            midiOutput.send([0xB0 + ch, 0x00, 0x00]); 
+            midiOutput.send([0xB0 + ch, 0x20, bankLSBValue]);
             midiOutput.send([0xC0 + ch, prog]);
-            log(`Program Change: Bank ${bank}, Prog ${prog}`, 'SYSEX_OUT');
+
+            log(`Program Change: Bank MSB CC0=0, Bank LSB CC32=${bankLSBValue}, Prog PC=${prog}`, 'SYSEX_OUT');
             blinkLed('midiOutStatus');
         }
 
