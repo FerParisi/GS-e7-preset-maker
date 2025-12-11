@@ -423,9 +423,9 @@
                 { name: "Porta", cc: 65, def: 127, type: "button-toggle", opts: {0:"Off", 127:"On"}, id: 48 },
                 { name: "P.Time", cc: 5, def: 0, type: "fader", id: 49 },
                 { name: "Bend", cc: 50, def: 2, type: "fader", max: 12, id: 50 },
+                { name: "Mode", cc: 116, def: 0, type: "enum", opts: {0:"Polyphonic", 16:"Mono, Single Trigger", 32:"Mono, Multi Trigger", 48:"Unison, Single Trigger", 64:"Unison, Multi Trigger"}, id: 98 },
                 { name: "V1 (Poly)", cc: 116, def: 0, type: "enum-v1", opts: {0:"All", 1:"Even", 2:"Odd", 3:"1->7", 4:"7->1"}, id: 99 },
-                { name: "V2 (Mono)", cc: 116, def: 0, type: "enum-v2", opts: {0:"Free", 1:"1", 2:"2", 3:"3", 4:"4", 5:"5", 6:"6", 7:"7"}, id: 100 },
-                { name: "Mode", cc: 116, def: 0, type: "enum", opts: {0:"Polyphonic", 16:"Mono, Single Trigger", 32:"Mono, Multi Trigger", 48:"Unison, Single Trigger", 64:"Unison, Multi Trigger"}, id: 98 }
+                { name: "V2 (Mono)", cc: 116, def: 0, type: "enum-v2", opts: {0:"Free", 1:"1", 2:"2", 3:"3", 4:"4", 5:"5", 6:"6", 7:"7"}, id: 100 }
             ]}
         ];
 
@@ -528,9 +528,11 @@
                 } else {
                     const modeParam = getParamById(param.modeId);
                     const modeVal = modeParam ? getCurrentValue(modeParam.id) : 0;
-                    if (modeVal < 64) {
+                    
+                    
+                    if (modeVal < 64) { 
                         txt = mapLfoRateToHz(val);
-                    } else {
+                    } else { 
                         txt = getNoteFraction(val);
                     }
                 }
@@ -875,17 +877,22 @@
                                 const p = ccMap.get(cc);
                                 if (p) {
                                     if (cc === 116) {
-                                        const v1Val = getV1Value(val);
-                                        const v2Val = getV2Value(val);
-                                        updateUIValueOnly(getParamById(99), v1Val);
-                                        updateUIValueOnly(getParamById(100), v2Val);
+                                        const syncValue = val;
+                                        const v1Val = getV1Value(syncValue);
+                                        const v2Val = getV2Value(syncValue);
 
+                                        const p1 = getParamById(99);
+                                        const p2 = getParamById(100);
                                         const pMode = getParamById(98);
+
+                                        updateUIValueOnly(p1, v1Val);
+                                        updateUIValueOnly(p2, v2Val);
+
                                         const keys = Object.keys(pMode.opts).map(Number).sort((a,b)=>a-b);
                                         let closestVal = keys[0];
                                         let minDiff = 127;
                                         for(let k of keys) {
-                                            const diff = Math.abs(k - val);
+                                            const diff = Math.abs(k - syncValue);
                                             if (diff < minDiff) {
                                                 minDiff = diff;
                                                 closestVal = k;
