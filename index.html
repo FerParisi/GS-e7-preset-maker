@@ -494,7 +494,7 @@
             else if (param.map === 'lfoRate') {
                 const mParam = getParamById(param.modeId);
                 const mVal = mParam ? getCurrentValue(mParam.id) : 0;
-                if (mVal >= 48) txt = getNoteFraction(val);
+                if (mVal >= 64) txt = getNoteFraction(val);
             } else if (param.map === 'v1poly') {
                 txt = mapV1Poly(val);
             } else if (param.map === 'v2mono') {
